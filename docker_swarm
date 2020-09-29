@@ -1,0 +1,39 @@
+---
+
+- hosts:
+- swam_cluster
+  become: yes
+
+  roles:
+    - docker-compose
+  tasks:
+    - name: Set machine hostname
+      hostname: name={{ hostname }}
+
+  # Set up cluster
+- hosts:
+    - swam_cluster
+  become: yes
+  roles:
+    - {
+        role: "docker.consul",
+        consul_command: "-server -advertise {{ ansible_default_ipv4['address'] }} -bootstrap-expect {{ groups['docker_cluster']|length }}"
+      }
+
+  # Configure consul on the other instances to join the cluster
+- hosts:
+    - swam_cluster
+  become: yes
+  roles:
+    - {
+        role: "docker.consul",
+        consul_command: "-server -advertise {{ ansible_default_ipv4['address'] }} -join {{ hostvars[groups['docker_cluster_primary'][0]]['ansible_default_ipv4']['address'] }}"
+      }
+
+  # Set up the docker swarm on all instances
+- hosts:
+    - swam_cluster
+  become: yes
+  roles:
+    - swarm-master
+    - swarm-agent
