@@ -1,0 +1,46 @@
+ansible-galaxy init docker-swarm.yaml - --------------> it will create role under roles in /etc/ans
+
+dockerswarm.yaml
+---
+- name: Install docker-compose
+  get_url:
+    url: https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-Linux-x86_64
+    dest: /usr/local/bin/docker-compose
+    force: yes
+
+- name: Set permissions on docker-compose 
+  file:
+    path: /usr/local/bin/docker-compose
+    mode: 0755
+
+
+swam-master.yaml
+services:
+  swarm_master:
+    image: swarm
+    ports:
+      - "8000:8000"
+    restart: always
+    mem_limit: "40M"
+    command: "manage -H :8000 --replication --advertise {{ ansible_default_ipv4["address"] }}:8000 consul://{{ ansible_default_ipv4["address"] }}:8500"
+
+swarm-agent.yaml
+---
+- name: Ensure required directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - /containers/docker-compose/
+
+- name: Ensure docker-compose for swarm-agent is up to date
+  template:
+    src: docker-compose-swarm-agent.yml
+    dest: /containers/docker-compose/docker-compose-swarm-agent.yml
+
+- name: Run docker-compose pull
+  command: /usr/local/bin/docker-compose -f /containers/docker-compose/docker-compose-swarm-agent.yml --project-name swarm-agent pull
+
+- name: Run docker-compose up
+  command: /usr/local/bin/docker-compose -f /containers/docker-compose/docker-compose-swarm-agent.yml --project-name swarm-agent up -d
+
